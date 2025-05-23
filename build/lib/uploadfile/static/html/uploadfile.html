@@ -1,0 +1,19 @@
+<div class="uploadfile-xblock">
+    <p>{prompt}</p>
+    <div id="drop-zone" class="drop-zone">
+        <span id="drop-zone-text">Drop your file here or click to select.</span>
+        <input
+            type="file"
+            id="upload-file-input"
+            style="display: none"
+            {submitted}
+        />
+    </div>
+    <button id="upload-file-btn" {submitted}>Upload</button>
+    <div id="uploaded-file">
+        {%- if file_url %}
+        <a href="{file_url}" target="_blank">View uploaded file</a>
+        {%- endif %}
+    </div>
+    <div id="upload-status"></div>
+</div>

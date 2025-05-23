@@ -1,0 +1,17 @@
+{
+  "venvPath": "../xblock-sdk",
+  "venv": ".venv",
+  "typeCheckingMode": "basic",
+  "reportArgumentType": false,
+  "reportIndexIssue": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownMemberType": false,
+  "reportMissingTypeStubs": false,
+  "reportGeneralTypeIssues": false,
+  "reportAttributeAccessIssue": false,
+  "reportOptionalSubscript": false,
+  "reportOptionalMemberAccess": false,
+  "reportOptionalCall": false,
+  "reportOptionalIterable": false
+}
