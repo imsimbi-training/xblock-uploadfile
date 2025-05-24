@@ -68,10 +68,16 @@
 
 .uploadfile-xblock .instructions {
     display: block;
+    padding: 3px;
     font-size: 12px;
 }
 
 .uploadfile-xblock .filename {
-    display: block;
     padding: 5px;
+    font-weight: 600;
+}
+
+.uploadfile-xblock .subtext {
+    padding: 5px;
+    color: #333;
 }

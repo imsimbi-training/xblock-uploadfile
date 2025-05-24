@@ -1,5 +1,4 @@
 function UploadFileXBlock(runtime, element) {
-  console.log("UploadFileXBlock", runtime, element);
   var dropZone = $("#uploadfile-drop-zone", element);
   var fileInput = $("#uploadfile-input", element);
   var uploadBtn = $("#uploadfile-btn", element);
@@ -7,7 +6,6 @@ function UploadFileXBlock(runtime, element) {
   var downloadDiv = $("#uploadfile-download", element);
   var selectedFile = null;
 
-  console.log("uploadBtn", uploadBtn);
   uploadBtn.hide();
   // Allow clicking the drop zone to trigger file input
   dropZone.on("click", function (e) {
@@ -18,6 +16,7 @@ function UploadFileXBlock(runtime, element) {
     selectedFile = file;
     uploadBtn.show();
     dropZone.find("#drop-zone-text").text(file.name);
+    dropZone.find("#drop-zone-subtext").text("File uploaded:");
     statusDiv.text("");
   }
   // File selected via input

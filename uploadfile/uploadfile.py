@@ -1,6 +1,7 @@
 """A file upload response for OpenEdx courses."""
 import base64
 import urllib
+from lxml import html as lxml_html
 from django.http import HttpResponse, Http404
 
 import logging
@@ -29,14 +30,14 @@ class UploadFileBlock(StudioEditableXBlockMixin, XBlock):
     display_name = String(
         display_name="Display Name",
         help="This is the title for this question type",
-        default="File Upload",  # type: ignore
+        default="File Upload",
         scope=Scope.settings,
     )
 
     file_types = String(
         display_name="File types",
         help="Files that can be uploaded",
-        default="*.pdf, *.jpg, *.jpeg, *.png",  # type: ignore
+        default=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*",
         scope=Scope.settings,
     )
 
@@ -77,15 +78,39 @@ class UploadFileBlock(StudioEditableXBlockMixin, XBlock):
         """
         file_info = self.file_info
         has_file = self.submitted and file_info.get('file_url')
+        user_filename = file_info.get("user_filename", "")
+        subtext = "File uploaded:" if user_filename else ""
         html = self.resource_string("static/html/uploadfile.html").format(
             prompt=self.prompt,
+            subtext=subtext,
             file_url=file_info.get("file_url", ""),
-            filename=file_info.get(
-                "user_filename", ""),
+            file_types=self.file_types,
+            filename=user_filename,
             submitted="true" if file_info.get("submitted", False) else "false",
             state_class=self.state_class(),
             download_display='none' if not has_file else 'inline-block'
         )
+
+        # Parse HTML and add accept attribute to file inputs
+        try:
+            # Parse the HTML
+            doc = lxml_html.fromstring(html)
+
+            # Find all input elements with type="file"
+            file_inputs = doc.xpath('//input[@type="file"]')
+
+            # Add accept attribute to each file input
+            for file_input in file_inputs:
+                file_input.set('accept', self.file_types)
+
+            # Convert back to string
+            html = lxml_html.tostring(doc, encoding='unicode')
+
+        except Exception as e:
+            # If parsing fails, log the error and use original HTML
+            log.warning(
+                "Failed to parse HTML for adding accept attribute %s", e)
+
         frag = Fragment(html)
         frag.add_css(self.resource_string("static/css/uploadfile.css"))
         frag.add_javascript(self.resource_string("static/js/uploadfile.js"))
@@ -93,8 +118,8 @@ class UploadFileBlock(StudioEditableXBlockMixin, XBlock):
         return frag
 
     def full_filename(self, filename):
-        student_id = self.runtime.user_id
-        return f"xblock_uploadfile/{student_id}/{filename}"
+        user_id = self.runtime.user_id
+        return f"xblock_uploadfile/{user_id}/{filename}"
 
     @ XBlock.json_handler
     def upload_file(self, data, suffix=''):
