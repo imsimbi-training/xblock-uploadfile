@@ -3,28 +3,68 @@ function UploadFileXBlock(runtime, element) {
   var fileInput = $("#uploadfile-input", element);
   var uploadBtn = $("#uploadfile-btn", element);
   var statusDiv = $("#uploadfile-status", element);
-  var downloadDiv = $("#uploadfile-download", element);
-  var selectedFile = null;
-
+  var selectedFiles = null;
+  var maxSizeMb = parseInt($(".uploadfile-xblock", element).data('max-size-mb'));
   uploadBtn.hide();
   // Allow clicking the drop zone to trigger file input
   dropZone.on("click", function (e) {
-    if (e.target !== fileInput[0]) fileInput.click();
+    if (e.target !== fileInput[0] && e.target.tagName !== "A") fileInput.click();
   });
 
-  function fileSelected(file) {
-    selectedFile = file;
-    uploadBtn.show();
-    dropZone.find("#drop-zone-text").text(file.name);
-    dropZone.find("#drop-zone-subtext").text("File uploaded:");
-    statusDiv.text("");
+  function showStatus(status) {
+    console.log('status', status);
+    statusDiv.text(status);
+  }
+
+  function refresh(status) {
+    $.ajax({
+      type: "POST",
+      url: runtime.handlerUrl(element, "refresh_content"),
+      contentType: "application/json; charset=utf-8",
+      data: JSON.stringify({}),
+      success: function (response) {
+        const { file_html, file_subtext, instructions } = response;
+        dropZone.find("#drop-zone-text").html(file_html);
+        dropZone.find("#drop-zone-subtext").text(file_subtext);
+        dropZone.find("#instructions").text(instructions);
+        uploadBtn.hide();
+        showStatus(status);
+      },
+    });
+  }
+
+  function filesSelected(files) {
+    selectedFiles = files;
+    const selectFilesArray = Array.from(selectedFiles);
+    const warnings = [];
+
+    for (const file of selectFilesArray) {
+      if (file.size > maxSizeMb * 1024 * 1024) {
+        warnings.push(file.name);
+      }
+    }
+    if (warnings.length) {
+      const warningStatus = `These files are too big: ${warnings.join(", ")}`;
+      showStatus(warningStatus);
+    }
+    if (selectFilesArray && selectFilesArray.length > 0) {
+      const names = selectFilesArray.map((o) => o.name).join(", ");
+      uploadBtn.show();
+      dropZone.find("#drop-zone-text").text(names);
+      dropZone.find("#drop-zone-subtext").text("Files uploaded:");
+    } else {
+      uploadBtn.hide();
+      dropZone.find("#drop-zone-text").text("");
+      dropZone.find("#drop-zone-subtext").text("");
+    }
   }
   // File selected via input
   fileInput.on("change", function (e) {
-    if (fileInput.length > 0 && fileInput[0].files.length > 0) {
-      fileSelected(fileInput[0].files[0]);
+    showStatus("");
+    if (e.target.files.length > 0) {
+      filesSelected(e.target.files);
     } else {
-      uploadBtn.hide();
+      filesSelected(null);
     }
   });
 
@@ -46,43 +86,68 @@ function UploadFileXBlock(runtime, element) {
     e.stopPropagation();
     dropZone.removeClass("dragover");
     var files = e.originalEvent.dataTransfer.files;
-    if (files.length > 0) {
-      fileSelected(files[0]);
-    }
+    showStatus("");
+    filesSelected(files);
   });
 
+  async function uploadFiles() {
+    try {
+      showStatus("Uploading...");
+      // Upload files using Streams API
+      // const results = await Promise.all(
+      //   Array.from(selectedFiles).map((file) => uploadFileAsStream(file)),
+      // );
+      await uploadFilesAsStream(selectedFiles)
+      refresh();
+      selectedFiles = null;
+      showStatus("Uploaded successfully!");
+      // this.displayResults(results);
+    } catch (error) {
+      console.log('exception', error);
+      refresh();
+      showStatus(`Upload failed: ${error.message}`);
+    }
+  }
+
+  async function uploadFilesAsStream(files) {
+    const uploadUrl = runtime.handlerUrl(element, "stream_upload");
+
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append("files[]", file);
+    }
+    // formData.append("filename", file.name);
+    // formData.append("file_size", file.size);
+    // formData.append("file_type", file.type);
+
+    return new Promise((resolve, reject) => {
+      $.ajax({
+        url: uploadUrl,
+        method: "POST",
+        data: formData,
+        processData: false,  // Don't process FormData
+        contentType: false,  // Let browser set content-type
+        success: (response) => {
+          resolve(response);
+        },
+        error: (_xhr, _status, error) => {
+          console.log('uploadFileAsStream error', error, _status);
+          reject(new Error(error || 'Upload failed'));
+        }
+      });
+    });
+  }
+
   uploadBtn.click(function () {
-    if (!selectedFile) {
-      statusDiv.text("Please select or drop a file.");
+    if (!selectedFiles || selectedFiles.length === 0) {
+      showStatus("Please select or drop a file.");
       return;
     }
-    var reader = new FileReader();
-    reader.onload = function (e) {
-      $.ajax({
-        type: "POST",
-        url: runtime.handlerUrl(element, "upload_file"),
-        data: JSON.stringify({
-          filename: selectedFile.name,
-          file_data: btoa(e.target.result),
-          file_size: selectedFile.size,
-          file_type: selectedFile.type,
-        }),
-        contentType: "application/json; charset=utf-8",
-        success: function (response) {
-          statusDiv.text("Upload successful!");
-          downloadDiv.show();
-          var file_url = response.file_info.file_url;
-          downloadDiv.find("a").attr("href", file_url);
-        },
-      });
-      uploadBtn.hide();
-      selectedFile = null;
-    };
-    reader.readAsBinaryString(selectedFile);
+    uploadFiles();
   });
 
   function beforeUnload(event) {
-    if (selectedFile) {
+    if (selectedFiles) {
       event.preventDefault();
       event.returnValue = "";
     }

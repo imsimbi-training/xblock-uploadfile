@@ -1,14 +1,14 @@
 """A worksheet in structured using HTML/CSS that the student fills out with multiple free text responses."""
 
-import importlib
 import logging
 import pkg_resources
 from web_fragments.fragment import Fragment
 from xblock.core import XBlock
-from xblock.fields import Dict, Scope, String
+from xblock.fields import Scope, String, List, Boolean
 from xblock.utils.studio_editable import StudioEditableXBlockMixin
 
-from copy import deepcopy
+from django.core.files.storage import default_storage
+from django.http import JsonResponse
 
 log = logging.getLogger(__name__)
 
@@ -29,14 +29,14 @@ class WorksheetBlock(StudioEditableXBlockMixin, XBlock):
     display_name = String(
         display_name="Display Name",
         help="This is the title for this question type",
-        default="File Upload",  # type: ignore
+        default="File Upload",
         scope=Scope.settings,
     )
 
     file_types = String(
         display_name="File types",
         help="Files that can be uploaded",
-        default="*.pdf, *.jpg, *.jpeg, *.png",  # type: ignore
+        default="*.pdf, *.jpg, *.jpeg, *.png",
         scope=Scope.settings,
     )
 
@@ -47,8 +47,14 @@ class WorksheetBlock(StudioEditableXBlockMixin, XBlock):
         scope=Scope.settings,
     )
 
-    student_answer = Dict(
-        default={"submitted": False},  # type: ignore
+    file_info = List(
+        default=[],
+        scope=Scope.user_state,
+        help="A map of the user responses on the worksheet",
+    )
+
+    submitted = Boolean(
+        default=False,
         scope=Scope.user_state,
         help="A map of the user responses on the worksheet",
     )
@@ -74,25 +80,6 @@ class WorksheetBlock(StudioEditableXBlockMixin, XBlock):
         frag.add_javascript(self.resource_string("static/js/uploadfile.js"))
         frag.initialize_js('UploadFileXBlock')
         return frag
-
-    @XBlock.json_handler
-    def upload_file(self, data, suffix=''):
-        """
-        Receives file uploads from the JS frontend, stores the file, and records submission.
-        """
-        file_data = data['file_data']
-        file_name = data['file_name']
-
-        # Store the file (this uses student state storage)
-        file_storage = self.runtime.student_file_storage(self)
-        file_storage.save(file_name, file_data.encode(
-            'latin1'))  # decode if needed
-
-        # Save the file reference
-        self.file_url = self.runtime.handler_url(
-            self, 'get_file', suffix=file_name)
-        self.submitted = True
-        return {"result": "success", "file_url": self.file_url}
 
     @XBlock.handler
     def get_file(self, request, suffix=''):
@@ -121,3 +108,62 @@ class WorksheetBlock(StudioEditableXBlockMixin, XBlock):
                     """,
             ),
         ]
+
+    @XBlock.handler
+    def stream_upload(self, request, suffix=''):
+        """
+        Handle streaming file upload using Django's built-in mechanisms.
+        This automatically handles the streaming without explicit chunking.
+        """
+        if request.method != 'POST':
+            return JsonResponse({"result": "error", "message": "Only POST allowed"})
+
+        try:
+            # Django automatically handles streaming for file uploads
+            # Files are streamed to temporary files automatically
+            uploaded_files = []
+
+            for field_name, uploaded_file in request.FILES.items():
+                # Process each uploaded file
+                file_info = self.process_uploaded_file(uploaded_file)
+                uploaded_files.append(file_info)
+
+            self.file_info = uploaded_files
+            self.submitted = True
+            return JsonResponse({
+                "result": "success",
+                "files_info": uploaded_files,
+                "count": len(uploaded_files)
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                "result": "error",
+                "message": str(e)
+            })
+
+    def process_uploaded_file(self, uploaded_file):
+        """
+        Process a single uploaded file that was streamed by Django.
+        """
+        # Get file metadata
+        filename = uploaded_file.name
+        file_size = uploaded_file.size
+        content_type = uploaded_file.content_type
+
+        # Create full filename
+        full_filename = self.full_filename(filename)
+
+        # Save the file - Django handles the streaming internally
+        # The uploaded_file is already a file-like object that can be saved directly
+        file_path = default_storage.save(full_filename, uploaded_file)
+        file_url = default_storage.url(file_path)
+
+        return {
+            'user_filename': filename,
+            'filename': full_filename,
+            'file_path': file_path,
+            'file_url': file_url,
+            'size': file_size,
+            'content_type': content_type
+        }

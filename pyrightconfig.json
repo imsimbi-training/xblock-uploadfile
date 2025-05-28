@@ -13,5 +13,6 @@
   "reportOptionalSubscript": false,
   "reportOptionalMemberAccess": false,
   "reportOptionalCall": false,
-  "reportOptionalIterable": false
+  "reportOptionalIterable": false,
+  "reportOperatorIssue": false
 }

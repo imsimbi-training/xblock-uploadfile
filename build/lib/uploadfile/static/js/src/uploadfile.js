@@ -3,20 +3,31 @@ function UploadFileXBlock(runtime, element) {
   var fileInput = element.find("#upload-file-input");
   var uploadBtn = element.find("#upload-file-btn");
   var statusDiv = element.find("#upload-status");
-  var selectedFile = null;
+  var selectedFiles = null;
 
   // Allow clicking the drop zone to trigger file input
   dropZone.on("click", function () {
     fileInput.click();
   });
 
+  function showStatus(status) {
+    statusDiv.text(status);
+  }
+
+  function setFiles(files) {
+    selectedFiles = files;
+    const content = files ? files.map((f) => f.name) : "";
+    dropZone.find("#drop-zone-text").text(content);
+  }
+
   // File selected via input
   fileInput.on("change", function (e) {
-    if (fileInput[0].files.length > 0) {
-      selectedFile = fileInput[0].files[0];
-      dropZone.find("#drop-zone-text").text(selectedFile.name);
-      statusDiv.text("");
+    if (e.target.files.length > 0) {
+      setFiles(e.target.files);
+    } else {
+      setFiles();
     }
+    showStatus("");
   });
 
   // Handle drag over
@@ -37,18 +48,11 @@ function UploadFileXBlock(runtime, element) {
     e.stopPropagation();
     dropZone.removeClass("dragover");
     var files = e.originalEvent.dataTransfer.files;
-    if (files.length > 0) {
-      selectedFile = files[0];
-      dropZone.find("#drop-zone-text").text(selectedFile.name);
-      statusDiv.text("");
-    }
+    setFiles(files);
+    showStatus("");
   });
 
-  uploadBtn.click(function () {
-    if (!selectedFile) {
-      statusDiv.text("Please select or drop a file.");
-      return;
-    }
+  function uploadFilesNonStream() {
     var reader = new FileReader();
     reader.onload = function (e) {
       runtime.notify("save", { state: "start" });
@@ -61,7 +65,7 @@ function UploadFileXBlock(runtime, element) {
         }),
         contentType: "application/json; charset=utf-8",
         success: function (response) {
-          statusDiv.text("Upload successful!");
+          showStatus("Upload successful!");
           runtime.notify("save", { state: "end" });
           if (response.file_url) {
             element
@@ -76,5 +80,59 @@ function UploadFileXBlock(runtime, element) {
       });
     };
     reader.readAsBinaryString(selectedFile);
+  }
+
+  async function uploadFilesStream(selectedFiles) {
+    try {
+      showStatus("Starting upload...");
+
+      // Upload files using Streams API
+      const results = await Promise.all(
+        Array.from(selectedFiles).map((file) => uploadFileAsStream(file)),
+      );
+
+      showStatus("Uploaded successfully!");
+      // this.displayResults(results);
+    } catch (error) {
+      showStatus(`Upload failed: ${error.message}`);
+    }
+  }
+
+  async function uploadFileAsStream(file) {
+    // Create a readable stream from the file
+    const fileStream = file.stream();
+
+    // Get upload URL from backend
+    const uploadUrl = this.runtime.handlerUrl(this.element, "stream_upload");
+
+    // Create FormData with the file
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("filename", file.name);
+    formData.append("file_size", file.size);
+    formData.append("file_type", file.type);
+
+    // Use fetch with streaming
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      body: formData, // FormData automatically streams the file
+      headers: {
+        // "X-CSRFToken": this.getCSRFToken(), // Add CSRF if needed
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  uploadBtn.click(function () {
+    if (!selectedFiles || selectedFiles.length === 0) {
+      showStatus("Please select or drop a file.");
+      return;
+    }
+    uploadFilesNonStream();
   });
 }

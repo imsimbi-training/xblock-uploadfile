@@ -1,21 +1,12 @@
-<div class="uploadfile-xblock {state_class}">
+<div class="uploadfile-xblock {state_class}" data-max-size-mb="{max_size_mb}">
     <p>{prompt}</p>
     <div id="uploadfile-drop-zone" class="uploadfile-drop-zone">
-        <span id="drop-zone-subtext" class="subtext">{subtext}</span
-        ><span id="drop-zone-text" class="filename">{filename}</span>
-        <span class="instructions"
-            >Click here or drop a file to upload your response.</span
-        >
+        <span id="drop-zone-subtext" class="subtext">{subtext}</span>
+        <span id="drop-zone-text" class="filename">{filename}</span>
+        <span id="instructions" class="instructions">{instructions}</span>
         <span class="instructions">Accepted file types: {file_types}</span>
-        <input type="file" id="uploadfile-input" style="display: none" />
+        <input type="file" {multiple} id="uploadfile-input" style="display: none" />
     </div>
     <button id="uploadfile-btn" class="submit">Upload</button>
-    <div
-        id="uploadfile-download"
-        class="download-link"
-        style="display: {download_display}"
-    >
-        <a href="{file_url}" download target="_blank">Download file</a>
-    </div>
     <div id="uploadfile-status"></div>
 </div>
